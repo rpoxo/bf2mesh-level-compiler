@@ -180,7 +180,7 @@ def set_logging(args):
 
 if __name__ == "__main__":
     logging.basicConfig(
-                        filename=f'{os.path.basename(__file__).log',
+                        filename=f'{os.path.basename(__file__)}.log',
                         filemode='w',
                         format='[%(asctime)s] %(levelname)s:%(name)s:%(message)s',
                         datefmt='%X',
