@@ -64,7 +64,6 @@ def parse_config_staticobjects(fname):
         matches = re.findall(
                             pattern=pattern_create,
                             string=staticobjects.read(),
-                            #string=string,
                             flags=re.IGNORECASE | re.MULTILINE)
     staticobjects: List[Staticobject] = []
     for match in matches:
