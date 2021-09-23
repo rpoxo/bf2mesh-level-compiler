@@ -46,7 +46,8 @@ class Staticobject(object):
     
     def setRotation(self, yaw, pitch, roll):
         # bf2 world rotated?
-        self.rotation = Vec3(0 - float(yaw), pitch, roll)
+        #self.rotation = Vec3(0 - float(yaw), pitch, roll)
+        self.rotation = Vec3(yaw, pitch, roll)
     
     def __str__(self):
         return f'{self.name} ({self.position})'

@@ -48,7 +48,6 @@ def rename_template(src, name, new_name):
                 generate_template_visible_only(old_path, new_path, name, new_name)
                 logging.info(f'removing {old_path}')
                 os.remove(old_path)
-                
 
 def copy_as_custom_template(template_name, new_template_name, templates, dst):
     src = os.path.dirname(templates[template_name])
@@ -65,7 +64,9 @@ def copy_as_custom_template(template_name, new_template_name, templates, dst):
 def merge_cluster(staticobjects: List[Staticobject], templates, geometries, dst):
     base = staticobjects[0]
     with VisibleMesh(geometries[base.name]) as basemesh:
-        basemesh.rotate([*base.rotation])
+        logging.info(f'rotating base {base.name} for {base.rotation}')
+        basemesh.rotate(base.rotation)
+        logging.info(f'translating base {base.name} for {base.position}')
         basemesh.translate(base.position)
         for staticobject in staticobjects[1:]:
             with VisibleMesh(geometries[staticobject.name]) as secondmesh:
@@ -73,13 +74,17 @@ def merge_cluster(staticobjects: List[Staticobject], templates, geometries, dst)
                 offset = base.position - staticobject.position
                 secondmesh.translate(staticobject.position)
                 basemesh.merge(secondmesh)
+        logging.info(f'translating base {base.name} for {-base.position}')
         basemesh.translate(-base.position)
+        logging.info(f'rotating base {base.name} for {-base.rotation}')
+        basemesh.rotate(-base.rotation)
         export_name = f'{base.name}_merged={"=".join([str(round(axis)) for axis in base.position])}'
         export_fname = os.path.join(dst, export_name, 'meshes', export_name+'.staticmesh')
         copy_as_custom_template(base.name, export_name, templates, dst)
         logging.info(f'exporting in {export_fname}')
         basemesh.export(export_fname)
-    return
+    
+    return os.path.join(export_name, export_name+'.con')
 
 def get_clusters(group: List[Staticobject], geometries: Dict[str, str]):
     logging.info('getting mergeable clusters from group:')
@@ -125,16 +130,25 @@ def merge_group(modroot, levelname, config, templates: Dict[str, str], geometrie
 
     for group in groups:
         clusters = get_clusters(group, geometries)
+        configs_group: List[str] = []
         for cluster in clusters:
-            merge_cluster(cluster, templates, geometries, dst)
-        generate_group_config(modroot, levelroot, config_group, clusters)
+            config_cluster = merge_cluster(cluster, templates, geometries, dst)
+            config_cluster = os.path.join('objects', config_cluster).replace('\\', '/')
+            configs_group.append(config_cluster)
+        generate_group_config(modroot, levelroot, config_group, clusters, configs_group)
 
-def generate_group_config(modroot, levelroot, config, clusters: List[List[Staticobject]]):
+def generate_group_config(modroot, levelroot, config, clusters: List[List[Staticobject]], configs_cluster: List[str]):
     config_group = os.path.join(levelroot, config)
     root, ext = os.path.splitext(config_group)
     new_config_group = root + '_vismeshes' + ext
     logging.info(f'writing merged group config to {new_config_group}')
     with open(new_config_group, 'w') as groupconfig:
+        groupconfig.write('if v_arg1 == BF2Editor\n')
+        groupconfig.write('console.allowMultipleFileLoad 0\n')
+        for config_cluster in configs_cluster:
+            groupconfig.write(f'run {config_cluster}\n')
+        groupconfig.write('console.allowMultipleFileLoad 1\n')
+        groupconfig.write('endIf\n')
         for cluster in clusters:
             base = cluster[0]
             cluster_name = f'{base.name}_merged={"=".join([str(round(axis)) for axis in base.position])}'
