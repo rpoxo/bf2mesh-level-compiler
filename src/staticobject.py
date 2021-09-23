@@ -1,4 +1,5 @@
 import re
+import logging
 from vec3 import Vec3
 
 from typing import List
@@ -49,3 +50,17 @@ class Staticobject(object):
     
     def __str__(self):
         return f'{self.name} ({self.position})'
+    
+    def _bf2float3str(self, float3: List[float]):
+        return f'{float3[0]}/{float3[1]}/{float3[2]}'
+    
+    def getCreateCommands(self):
+        command = f'''
+rem *** {self.name} ***
+Object.create {self.name}
+Object.absolutePosition {self._bf2float3str([*self.position])}
+Object.rotation {self._bf2float3str([*self.rotation])}
+Object.layer 1
+Object.group {self.group}
+'''
+        return command

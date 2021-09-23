@@ -12,10 +12,10 @@ from bf2mesh.visiblemesh import VisibleMesh
 
 from staticobject import Staticobject, parse_config_staticobjects
 
-def get_mod_meshes(root, modPath):
+def get_mod_meshes(modroot):
     pattern_geometry_create = r'GeometryTemplate.create StaticMesh (?P<filename>\S+)'
     meshes: Dict[str, str] = {}
-    scanpath = os.path.join(root, modPath, 'objects')
+    scanpath = os.path.join(modroot, 'objects')
     for dirname, dirnames, filenames in os.walk(scanpath):
         for filename in filenames:
             if filename.endswith('.con'):
@@ -36,7 +36,7 @@ def get_mod_meshes(root, modPath):
 def get_groups(staticobjects):
     return [list(group) for _, group in groupby(sorted(staticobjects, key=attrgetter('group')), attrgetter('group'))]
 
-def merge_cluster(staticobjects: List[Staticobject], geometries):
+def merge_cluster(staticobjects: List[Staticobject], geometries, dst):
     base = staticobjects[0]
     with VisibleMesh(geometries[base.name]) as basemesh:
         basemesh.rotate([*base.rotation])
@@ -48,7 +48,8 @@ def merge_cluster(staticobjects: List[Staticobject], geometries):
                 secondmesh.translate(staticobject.position)
                 basemesh.merge(secondmesh)
         basemesh.translate(-base.position)
-        export_fname = f'./{base.name}_merged={"=".join([str(round(axis)) for axis in base.position])}.staticmesh'
+        export_fname = f'{base.name}_merged={"=".join([str(round(axis)) for axis in base.position])}.staticmesh'
+        export_fname = os.path.join(dst, export_fname)
         logging.info(f'exporting in {export_fname}')
         basemesh.export(export_fname)
 
@@ -86,21 +87,39 @@ def get_clusters(group: List[Staticobject], geometries: Dict[str, str]):
 
     return [cluster for cluster in clusters if len(cluster) > 1]
 
-def merge(groups, geometries):
+def merge_group(modroot, levelname, config, geometries: Dict[str, str]):
+    levelroot = os.path.join(modroot, 'levels', levelname)
+    config_group = os.path.join(levelroot, config)
+    staticobjects = parse_config_staticobjects(config_group)
+    
+    dst = os.path.join(levelroot, 'objects')
+    groups = get_groups(staticobjects)
+
     for group in groups:
         clusters = get_clusters(group, geometries)
         for cluster in clusters:
-            merge_cluster(cluster, geometries)
+            merge_cluster(cluster, geometries, dst)
+        generate_group_config(modroot, levelroot, config_group, clusters)
+
+def generate_group_config(modroot, levelroot, config, clusters: List[List[Staticobject]]):
+    config_group = os.path.join(levelroot, config)
+    root, ext = os.path.splitext(config_group)
+    new_config_group = root + '_vismeshes' + ext
+    logging.info(f'writing merged group config to {new_config_group}')
+    with open(new_config_group, 'w') as groupconfig:
+        for cluster in clusters:
+            base = cluster[0]
+            groupconfig.write(base.getCreateCommands())
 
 def main():
-    config_staticobjects = 'StaticObjects.con'
     root = os.path.join('E:/', 'Games', 'Project Reality')
     modPath = os.path.join('mods', 'pr_repo')
+    modroot = os.path.join(root, modPath)
+    levelname = 'kokan'
+    config_group = 'StaticObjects_2.con'
 
-    staticobjects = parse_config_staticobjects(config_staticobjects)
-    geometries = get_mod_meshes(root, modPath)
-    groups = get_groups(staticobjects)
-    merge(groups, geometries)
+    geometries = get_mod_meshes(modroot)
+    merge_group(modroot, levelname, config_group, geometries)
 
     # group objects in editor by mapper
     # generate merge plan:

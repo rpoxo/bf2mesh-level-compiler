@@ -9,14 +9,23 @@ from typing import List, Dict
 from mod import get_mod_geometries
 from staticobject import parse_config_staticobjects
 
+def copy_objects():
+    pass
+
 def main(args):
     args.root = os.path.join('E:/', 'Games', 'Project Reality')
     args.modPath = os.path.join('mods', 'pr_repo')
+    modroot = os.path.join(args.root, args.modPath)
     args.level = 'kokan'
-    args.fname = 'StaticObjects_2.con'
+    # will be called in func
+    args.fname = 'StaticObjects_2.con' 
 
-    geometries = get_mod_geometries(args.root, args.modPath)
-    config_fname = os.path.join(args.root, args.modPath, 'levels', args.level, args.fname)
+    geometries = get_mod_geometries(modroot)
+
+    src_objects = os.path.join(modroot, 'objects')
+    dst_objects = os.path.join(modroot, 'levels', args.level, 'objects')
+
+    config_fname = os.path.join(modroot, 'levels', args.level, args.fname)
     staticobjects = parse_config_staticobjects(config_fname)
 
 def set_logging(args):
