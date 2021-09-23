@@ -3,6 +3,7 @@ import argparse
 import re
 import os
 import sys
+import shutil
 from typing import List, Dict, Tuple
 from itertools import groupby
 from operator import attrgetter
@@ -16,7 +17,12 @@ from staticobject import Staticobject, parse_config_staticobjects
 def get_groups(staticobjects):
     return [list(group) for _, group in groupby(sorted(staticobjects, key=attrgetter('group')), attrgetter('group'))]
 
-def merge_cluster(staticobjects: List[Staticobject], geometries, dst):
+def copy_as_custom_template(template_name, new_template_name, templates, dst):
+    src = os.path.dirname(templates[template_name])
+    dst = os.path.join(dst, new_template_name)
+    shutil.copytree(src, dst)
+
+def merge_cluster(staticobjects: List[Staticobject], templates, geometries, dst):
     base = staticobjects[0]
     with VisibleMesh(geometries[base.name]) as basemesh:
         basemesh.rotate([*base.rotation])
@@ -31,7 +37,10 @@ def merge_cluster(staticobjects: List[Staticobject], geometries, dst):
         export_name = f'{base.name}_merged={"=".join([str(round(axis)) for axis in base.position])}'
         export_fname = os.path.join(dst, export_name, 'meshes', export_name+'.staticmesh')
         logging.info(f'exporting in {export_fname}')
+        copy_as_custom_template(base.name, export_name, templates, dst)
+        raise
         basemesh.export(export_fname)
+    return base.name, export_name
 
 def get_clusters(group: List[Staticobject], geometries: Dict[str, str]):
     logging.info('getting mergeable clusters from group:')
@@ -67,7 +76,7 @@ def get_clusters(group: List[Staticobject], geometries: Dict[str, str]):
 
     return [cluster for cluster in clusters if len(cluster) > 1]
 
-def merge_group(modroot, levelname, config, geometries: Dict[str, str]):
+def merge_group(modroot, levelname, config, templates: Dict[str, str], geometries: Dict[str, str]):
     levelroot = os.path.join(modroot, 'levels', levelname)
     config_group = os.path.join(levelroot, config)
     staticobjects = parse_config_staticobjects(config_group)
@@ -78,7 +87,7 @@ def merge_group(modroot, levelname, config, geometries: Dict[str, str]):
     for group in groups:
         clusters = get_clusters(group, geometries)
         for cluster in clusters:
-            merge_cluster(cluster, geometries, dst)
+            merge_cluster(cluster, templates, geometries, dst)
         generate_group_config(modroot, levelroot, config_group, clusters)
 
 def generate_group_config(modroot, levelroot, config, clusters: List[List[Staticobject]]):
