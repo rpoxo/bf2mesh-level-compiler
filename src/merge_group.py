@@ -17,10 +17,50 @@ from staticobject import Staticobject, parse_config_staticobjects
 def get_groups(staticobjects):
     return [list(group) for _, group in groupby(sorted(staticobjects, key=attrgetter('group')), attrgetter('group'))]
 
+def generate_template_visible_only(src, dst, name, new_name):
+    patterns_collision = [
+        r'^CollisionManager.*',
+        r'^ObjectTemplate\.collisionMesh.*',
+        r'^ObjectTemplate\.mapMaterial.*',
+        r'^ObjectTemplate\.hasCollisionPhysics.*',
+        r'^ObjectTemplate\.physicsType.*',
+    ]
+    
+    # replace contents
+    with open(dst, 'w') as newconfig:
+        with open(src, 'r') as oldconfig:
+            contents = oldconfig.read()
+            contents = contents.replace(name, new_name)
+            for line in contents.splitlines():
+                if any([re.findall(pattern, line, re.IGNORECASE) for pattern in patterns_collision]):
+                    line = 'rem ' + line
+                newconfig.write(line + '\n')
+
+def rename_template(src, name, new_name):
+    for dirname, dirnames, filenames in os.walk(src):
+        for filename in filenames:
+            root, ext = os.path.splitext(filename)
+            if ext in ['.con', '.tweak']:
+                old_path = os.path.join(dirname, filename)
+                new_filename = filename.replace(name, new_name)
+                new_path = os.path.join(dirname, new_filename)
+
+                generate_template_visible_only(old_path, new_path, name, new_name)
+                logging.info(f'removing {old_path}')
+                os.remove(old_path)
+                
+
 def copy_as_custom_template(template_name, new_template_name, templates, dst):
     src = os.path.dirname(templates[template_name])
     dst = os.path.join(dst, new_template_name)
-    shutil.copytree(src, dst)
+    logging.info(f'copy {src} to {dst}')
+    # cleanup first
+    shutil.rmtree(dst, ignore_errors=True)
+    
+    shutil.copytree(src, dst, dirs_exist_ok=True)
+    shutil.rmtree(os.path.join(dst, 'meshes'))
+
+    rename_template(dst, template_name, new_template_name)
 
 def merge_cluster(staticobjects: List[Staticobject], templates, geometries, dst):
     base = staticobjects[0]
@@ -36,11 +76,10 @@ def merge_cluster(staticobjects: List[Staticobject], templates, geometries, dst)
         basemesh.translate(-base.position)
         export_name = f'{base.name}_merged={"=".join([str(round(axis)) for axis in base.position])}'
         export_fname = os.path.join(dst, export_name, 'meshes', export_name+'.staticmesh')
-        logging.info(f'exporting in {export_fname}')
         copy_as_custom_template(base.name, export_name, templates, dst)
-        raise
+        logging.info(f'exporting in {export_fname}')
         basemesh.export(export_fname)
-    return base.name, export_name
+    return
 
 def get_clusters(group: List[Staticobject], geometries: Dict[str, str]):
     logging.info('getting mergeable clusters from group:')
@@ -98,6 +137,8 @@ def generate_group_config(modroot, levelroot, config, clusters: List[List[Static
     with open(new_config_group, 'w') as groupconfig:
         for cluster in clusters:
             base = cluster[0]
+            cluster_name = f'{base.name}_merged={"=".join([str(round(axis)) for axis in base.position])}'
+            base.name = cluster_name
             groupconfig.write(base.getCreateCommands())
 
 def main():

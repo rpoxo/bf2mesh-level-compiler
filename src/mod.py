@@ -25,7 +25,7 @@ def get_mod_geometries(modroot):
     return meshes
 
 def get_mod_templates(modroot):
-    pattern_template_create = r'ObjectTemplate.create (?P<ObjectType>\S+) (?P<filename>\S+)'
+    pattern_template_create = r'ObjectTemplate.create (?P<ObjectType>\S+) (?P<ObjectName>\S+)'
     templates: Dict[str, str] = {}
     scanpath = os.path.join(modroot, 'objects')
     for dirname, dirnames, filenames in os.walk(scanpath):
@@ -33,8 +33,11 @@ def get_mod_templates(modroot):
             if filename.endswith('.con'):
                 confile = os.path.join(scanpath, dirname, filename)
                 with open(confile, 'r') as config:
-                    templates = re.findall(pattern_template_create, config.read())
-                    if templates:
-                        for template in templates:
+                    created = re.findall(pattern_template_create, config.read())
+                    if created:
+                        for create in created:
+                            # AttributeError: 'tuple' object has no attribute 'group'
+                            #template = create.group('ObjectName')
+                            template = create[1]
                             templates[template] = confile
     return templates
