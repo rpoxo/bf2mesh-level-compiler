@@ -48,8 +48,8 @@ def merge_cluster(staticobjects: List[Staticobject], geometries, dst):
                 secondmesh.translate(staticobject.position)
                 basemesh.merge(secondmesh)
         basemesh.translate(-base.position)
-        export_fname = f'{base.name}_merged={"=".join([str(round(axis)) for axis in base.position])}.staticmesh'
-        export_fname = os.path.join(dst, export_fname)
+        export_name = f'{base.name}_merged={"=".join([str(round(axis)) for axis in base.position])}'
+        export_fname = os.path.join(dst, export_name, 'meshes', export_name+'.staticmesh')
         logging.info(f'exporting in {export_fname}')
         basemesh.export(export_fname)
 
