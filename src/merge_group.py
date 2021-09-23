@@ -10,7 +10,7 @@ from operator import attrgetter
 import bf2mesh
 from bf2mesh.visiblemesh import VisibleMesh
 
-from staticobject import Staticobject
+from staticobject import Staticobject, parse_config_staticobjects
 
 def get_mod_meshes(root, modPath):
     pattern_geometry_create = r'GeometryTemplate.create StaticMesh (?P<filename>\S+)'
