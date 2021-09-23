@@ -1,6 +1,8 @@
 import re
 from vec3 import Vec3
 
+from typing import List
+
 def parse_config_staticobjects(fname):
     # windows using CR LF for ending line
     pattern_create = r'^Object.create (?P<name>.+)\r?\n'
