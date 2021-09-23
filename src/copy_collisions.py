@@ -15,8 +15,9 @@ def main(args):
     args.level = 'kokan'
     args.fname = 'StaticObjects_2.con'
 
-    geometries = get_mod_geometries(root, modPath)
-    staticobjects = parse_config_staticobjects(fname)
+    geometries = get_mod_geometries(args.root, args.modPath)
+    config_fname = os.path.join(args.root, args.modPath, 'levels', args.level, args.fname)
+    staticobjects = parse_config_staticobjects(config_fname)
 
 def set_logging(args):
     if args.verbose is not None:

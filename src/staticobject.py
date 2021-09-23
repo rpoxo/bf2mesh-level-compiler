@@ -1,3 +1,4 @@
+import re
 from vec3 import Vec3
 
 def parse_config_staticobjects(fname):

@@ -3,7 +3,7 @@ import argparse
 import re
 import os
 import sys
-from typing import List, Dict
+from typing import List, Dict, Tuple
 from itertools import groupby
 from operator import attrgetter
 
@@ -56,8 +56,8 @@ def get_clusters(group: List[Staticobject], geometries: Dict[str, str]):
     logging.info('getting mergeable clusters from group:')
     logging.info([staticobject.name for staticobject in group])
 
-    clusters: List[tuple[Staticobject]] = []
-    tests: Dict[tuple[tuple, tuple], bool] = {}
+    clusters: List[Tuple[Staticobject, ...]] = []
+    tests: Dict[Tuple[Tuple, Tuple], bool] = {}
     for id1, staticobject in enumerate(group):
         cluster: List[Staticobject] = []
         for id2, other in enumerate(group):
