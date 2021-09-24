@@ -16,7 +16,7 @@ def main(args):
     args.root = os.path.join('E:/', 'Games', 'Project Reality')
     args.modPath = os.path.join('mods', 'pr_repo')
     modroot = os.path.join(args.root, args.modPath)
-    args.level = 'kokan'
+    args.level = 'burning_sands'
     # will be called in func
     args.fname = 'StaticObjects_2.con' 
 

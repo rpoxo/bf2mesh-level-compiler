@@ -36,7 +36,7 @@ def generate_groups_configs(fname):
 def main():
     args.root = os.path.join('E:/', 'Games', 'Project Reality')
     args.modPath = os.path.join('mods', 'pr_repo')
-    args.level = 'kokan'
+    args.level = 'burning_sands'
     config_staticobjects = 'StaticObjects.con'
 
     fname = os.path.join(args.root, args.modPath, 'levels', args.level, config_staticobjects)

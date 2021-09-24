@@ -69,7 +69,8 @@ def merge_cluster(staticobjects: List[Staticobject], templates, geometries, dst)
         logging.info(f'translating base {base.name} for {base.position}')
         basemesh.translate(base.position)
         for staticobject in staticobjects[1:]:
-            with VisibleMesh(geometries[staticobject.name]) as secondmesh:
+            meshpath = get_meshpath(geometries, templates, staticobject.name)
+            with VisibleMesh(meshpath) as secondmesh:
                 secondmesh.rotate([*staticobject.rotation])
                 offset = base.position - staticobject.position
                 secondmesh.translate(staticobject.position)
@@ -86,7 +87,22 @@ def merge_cluster(staticobjects: List[Staticobject], templates, geometries, dst)
     
     return os.path.join(export_name, export_name+'.con')
 
-def get_clusters(group: List[Staticobject], geometries: Dict[str, str]):
+def get_meshpath(geometries, templates, templatename):
+    try:
+        meshpath = geometries[templatename]
+    except KeyError as err:
+        logging.warning(f'Could not find mesh path for {templatename}, looking in templates...')
+        with open(templates[templatename]) as secondconfig:
+            match = re.search(r'ObjectTemplate\.geometry (?P<geometry>\S+)', secondconfig.read(), re.IGNORECASE | re.MULTILINE)
+            if match:
+                geometryname = match.group('geometry')
+                logging.warning(f'Found geometry {geometryname}')
+                meshpath = geometries[geometryname]
+            else:
+                logging.error(f'could not find mesh path for {templatename}')
+    return meshpath
+
+def get_clusters(group: List[Staticobject], templates: Dict[str, str], geometries: Dict[str, str]):
     logging.info('getting mergeable clusters from group:')
     logging.info([staticobject.name for staticobject in group])
 
@@ -104,8 +120,10 @@ def get_clusters(group: List[Staticobject], geometries: Dict[str, str]):
                     logging.info(f'can skip merge test [{id1}]{staticobject.name} and [{id2}]{other.name}, adding [{id2}]{other.name} into cluster')
                     cluster.append(other)
             else:
-                with VisibleMesh(geometries[staticobject.name]) as basemesh:
-                    with VisibleMesh(geometries[other.name]) as othermesh:
+                meshpath = get_meshpath(geometries, templates, staticobject.name)
+                with VisibleMesh(meshpath) as basemesh:
+                    meshpath = get_meshpath(geometries, templates, other.name)
+                    with VisibleMesh(meshpath) as othermesh:
                         if basemesh.canMerge(othermesh):
                             logging.info(f'can merge [{id1}]{staticobject.name} and [{id2}]{other.name}, adding [{id2}]{other.name} into cluster')
                             cluster.append(other)
@@ -129,7 +147,7 @@ def merge_group(modroot, levelname, config, templates: Dict[str, str], geometrie
     groups = get_groups(staticobjects)
 
     for group in groups:
-        clusters = get_clusters(group, geometries)
+        clusters = get_clusters(group, templates, geometries)
         configs_group: List[str] = []
         for cluster in clusters:
             config_cluster = merge_cluster(cluster, templates, geometries, dst)
@@ -159,12 +177,17 @@ def main():
     root = os.path.join('E:/', 'Games', 'Project Reality')
     modPath = os.path.join('mods', 'pr_repo')
     modroot = os.path.join(root, modPath)
-    levelname = 'kokan'
-    config_group = 'StaticObjects_2.con'
+    levelname = 'burning_sands'
+    config_groups = [
+        'StaticObjects_1.con',
+        'StaticObjects_2.con',
+        'StaticObjects_3.con',
+    ]
 
     geometries = get_mod_geometries(modroot)
     templates = get_mod_templates(modroot)
-    merge_group(modroot, levelname, config_group, templates, geometries)
+    for config_group in config_groups:
+        merge_group(modroot, levelname, config_group, templates, geometries)
 
     # group objects in editor by mapper
     # generate merge plan:
