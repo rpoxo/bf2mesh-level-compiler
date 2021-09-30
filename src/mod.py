@@ -41,3 +41,12 @@ def get_mod_templates(modroot):
                             template = create[1]
                             templates[template] = confile
     return templates
+
+class Mod(object):
+
+    def __init__(self, name, modPath):
+        self.name = name
+        self.path = modPath
+
+    def loadTemplate(self, name):
+        pass

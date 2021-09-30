@@ -1,8 +1,11 @@
 import re
 import logging
+from typing import List
+
+from objectTemplate import ObjectTemplate
 from vec3 import Vec3
 
-from typing import List
+
 
 def parse_config_staticobjects(fname):
     # windows using CR LF for ending line
@@ -40,6 +43,8 @@ class Staticobject(object):
         self.position = Vec3(0.0, 0.0, 0.0)
         self.rotation = Vec3(0.0, 0.0, 0.0)
         self.group = 0
+        self._geometry = None
+        self._template = None
     
     def setPosition(self, x, y, z):
         self.position = Vec3(x, y, z)
@@ -65,3 +70,12 @@ Object.layer 1
 Object.group {self.group}
 '''
         return command
+    
+    @property
+    def template(self):
+        return self._template
+    
+    def loadTemplate(self, mod):
+        self._template = mod.loadTemplate(self.name)
+            
+    
