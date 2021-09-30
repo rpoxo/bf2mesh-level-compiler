@@ -5,7 +5,7 @@ from typing import Dict
 
 def get_mod_geometries(modroot):
     pattern_geometry_create = r'GeometryTemplate.create StaticMesh (?P<filename>\S+)'
-    meshes: Dict[str, str] = {}
+    meshes: Dict[str, os.PathLike] = {}
     scanpath = os.path.join(modroot, 'objects')
     for dirname, dirnames, filenames in os.walk(scanpath):
         for filename in filenames:
@@ -26,7 +26,7 @@ def get_mod_geometries(modroot):
 
 def get_mod_templates(modroot):
     pattern_template_create = r'ObjectTemplate.create (?P<ObjectType>\S+) (?P<ObjectName>\S+)'
-    templates: Dict[str, str] = {}
+    templates: Dict[str, os.PathLike] = {}
     scanpath = os.path.join(modroot, 'objects')
     for dirname, dirnames, filenames in os.walk(scanpath):
         for filename in filenames:

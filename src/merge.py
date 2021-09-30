@@ -228,15 +228,19 @@ def generate_group_config(modroot,
 
 
 def main(args):
-    root = os.path.join('E:/', 'Games', 'Project Reality')
-    modPath = os.path.join('mods', 'pr_repo')
-    modroot = os.path.join(root, modPath)
-    levelname = 'fallujah_west'
-    fname = 'staticobjects_group2.con'
+    args.root = os.path.join('E:/', 'Games', 'Project Reality')
+    args.modPath = os.path.join('mods', 'pr_repo')
+    args.level = 'fallujah_west'
+    args.fname = 'staticobjects_group2.con'
+
+    modroot = os.path.join(args.root, args.modPath)
+
+    logging.info(f'Merging meshes from {modroot}/levels/{args.level}/{args.fname}')
 
     geometries = get_mod_geometries(modroot)
-    templates = get_mod_templates(modroot)
-    merge_group(modroot, levelname, fname, templates, geometries)
+    configs = get_mod_templates(modroot)
+
+    merge_group(modroot, args.level, args.fname, configs, geometries)
 
     # group objects in editor by mapper
     # generate merge plan:
