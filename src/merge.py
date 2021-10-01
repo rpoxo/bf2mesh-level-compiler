@@ -103,6 +103,9 @@ def merge_cluster(
         logging.info(f'rotating base {base.name} for {-base.rotation}')
         basemesh.rotate(-base.rotation)
         export_name = f'{base.name}_merged={"=".join([str(round(axis)) for axis in base.position])}'
+        # NOTE: for some reason bf2 culls meshes if they not centered to bounding box
+        # Need to test if need to adjust whole mesh, or bounding box enough
+        raise NotImplementedError(f'add CenterToObject')
         export_fname = os.path.join(
             dst,
             export_name,
