@@ -115,32 +115,10 @@ def merge_cluster(
 
     return os.path.join(export_name, export_name + '.con')
 
-
-def get_meshpath(
-        geometries, templates, templatename):
-    try:
-        meshpath = geometries[templatename]
-    except KeyError as err:
-        logging.warning(
-            f'Could not find mesh path for {templatename}, looking in templates...')
-        with open(templates[templatename]) as secondconfig:
-            match = re.search(
-                r'ObjectTemplate\.geometry (?P<geometry>\S+)',
-                secondconfig.read(),
-                re.IGNORECASE | re.MULTILINE)
-            if match:
-                geometryname = match.group('geometry')
-                logging.warning(f'Found geometry {geometryname}')
-                meshpath = geometries[geometryname]
-            else:
-                logging.error(f'could not find mesh path for {templatename}')
-    return meshpath
-
-
 def get_clusters(
         group: List[Staticobject],
         templates: Dict[str, os.PathLike],
-        geometries: Dict[str, os.PathLike],
+        geometries: Dict[str, Geometry],
         ):
     logging.info(f'Testing merges in group {group[0].group}')
     logging.info([staticobject.name for staticobject in group])
@@ -184,7 +162,7 @@ def merge_group(
         levelname: str,
         config: os.PathLike,
         templates: Dict[str, os.PathLike],
-        geometries: Dict[str, os.PathLike],
+        geometries: Dict[str, Geometry],
         ):
     levelroot = os.path.join(modroot, 'levels', levelname)
     config_group = os.path.join(levelroot, config)
