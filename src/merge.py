@@ -10,12 +10,14 @@ from operator import attrgetter
 
 import bf2mesh
 from bf2mesh.visiblemesh import VisibleMesh
+from geometry import Geometry
 
 from mod import get_mod_templates, get_mod_geometries
+from objectTemplate import load_templates, load_geometries
 from staticobject import Staticobject, parse_config_staticobjects
 
 
-def get_groups(staticobjects):
+def get_groups(staticobjects: List[Staticobject]):
     return [
         list(group) for _,
         group in groupby(
@@ -80,21 +82,21 @@ def copy_as_custom_template(template_name, new_template_name, templates, dst):
 
 def merge_cluster(
         staticobjects: List[Staticobject],
-        templates,
-        geometries,
-        dst):
+        templates: Dict[str, os.PathLike],
+        geometries: Dict[str, Geometry],
+        dst: os.PathLike,
+        ):
     base = staticobjects[0]
-    with VisibleMesh(geometries[base.name]) as basemesh:
+    with VisibleMesh(base.geometry.path) as basemesh:
         logging.info(f'rotating base {base.name} for {base.rotation}')
         basemesh.rotate(base.rotation)
         logging.info(f'translating base {base.name} for {base.position}')
         basemesh.translate(base.position)
-        for staticobject in staticobjects[1:]:
-            meshpath = get_meshpath(geometries, templates, staticobject.name)
-            with VisibleMesh(meshpath) as secondmesh:
-                secondmesh.rotate([*staticobject.rotation])
-                offset = base.position - staticobject.position
-                secondmesh.translate(staticobject.position)
+        for other in staticobjects[1:]:
+            with VisibleMesh(other.geometry.path) as secondmesh:
+                secondmesh.rotate([*other.rotation])
+                offset = base.position - other.position
+                secondmesh.translate(other.position)
                 basemesh.merge(secondmesh)
         logging.info(f'translating base {base.name} for {-base.position}')
         basemesh.translate(-base.position)
@@ -114,7 +116,8 @@ def merge_cluster(
     return os.path.join(export_name, export_name + '.con')
 
 
-def get_meshpath(geometries, templates, templatename):
+def get_meshpath(
+        geometries, templates, templatename):
     try:
         meshpath = geometries[templatename]
     except KeyError as err:
@@ -134,9 +137,12 @@ def get_meshpath(geometries, templates, templatename):
     return meshpath
 
 
-def get_clusters(group: List[Staticobject],
-                 templates: Dict[str, str], geometries: Dict[str, str]):
-    logging.info('getting mergeable clusters from group:')
+def get_clusters(
+        group: List[Staticobject],
+        templates: Dict[str, os.PathLike],
+        geometries: Dict[str, os.PathLike],
+        ):
+    logging.info(f'Testing merges in group {group[0].group}')
     logging.info([staticobject.name for staticobject in group])
 
     clusters: List[Tuple[Staticobject, ...]] = []
@@ -173,16 +179,20 @@ def get_clusters(group: List[Staticobject],
     return [cluster for cluster in clusters if len(cluster) > 1]
 
 
-def merge_group(modroot: os.PathLike,
-                levelname: os.PathLike,
-                config: os.PathLike,
-                templates: Dict[str, str],
-                geometries: Dict[str, str]
-                ):
+def merge_group(
+        modroot: os.PathLike,
+        levelname: str,
+        config: os.PathLike,
+        templates: Dict[str, os.PathLike],
+        geometries: Dict[str, os.PathLike],
+        ):
     levelroot = os.path.join(modroot, 'levels', levelname)
     config_group = os.path.join(levelroot, config)
 
     staticobjects = parse_config_staticobjects(config_group)
+
+    #load_templates(staticobjects, templates)
+    load_geometries(staticobjects, templates, geometries)
 
     dst = os.path.join(levelroot, 'objects')
     groups = get_groups(staticobjects)
@@ -224,14 +234,14 @@ def generate_group_config(modroot,
             base = cluster[0]
             cluster_name = f'{base.name}_merged={"=".join([str(round(axis)) for axis in base.position])}'
             base.name = cluster_name
-            groupconfig.write(base.getCreateCommands())
+            groupconfig.write(base.generateCreateCommands())
 
 
 def main(args):
     args.root = os.path.join('E:/', 'Games', 'Project Reality')
     args.modPath = os.path.join('mods', 'pr_repo')
     args.level = 'fallujah_west'
-    args.fname = 'staticobjects_group2.con'
+    args.fname = 'staticobjects_2.con'
 
     modroot = os.path.join(args.root, args.modPath)
 
@@ -255,7 +265,7 @@ def main(args):
 
 def set_logging(args):
     if args.verbose is not None:
-        logger = logging.getLogger()
+        logger = logging.getLogger(__name__)
         levels = {
             0: logging.ERROR,
             1: logging.INFO,

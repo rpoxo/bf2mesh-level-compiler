@@ -1,13 +1,14 @@
+import os
 import re
 import logging
-from typing import List
+from typing import Dict, List
+from geometry import Geometry
 
-from objectTemplate import ObjectTemplate
 from vec3 import Vec3
 
 
 
-def parse_config_staticobjects(fname):
+def parse_config_staticobjects(fname: os.PathLike):
     # windows using CR LF for ending line
     pattern_create = r'^Object.create (?P<name>.+)\r?\n'
     pattern_create += r'Object.absolutePosition (?P<bf2position>\S+)\r?\n'
@@ -60,7 +61,7 @@ class Staticobject(object):
     def _bf2float3str(self, float3: List[float]):
         return f'{float3[0]}/{float3[1]}/{float3[2]}'
     
-    def getCreateCommands(self):
+    def generateCreateCommands(self):
         command = f'''
 rem *** {self.name} ***
 Object.create {self.name}
@@ -75,7 +76,26 @@ Object.group {self.group}
     def template(self):
         return self._template
     
-    def loadTemplate(self, mod):
-        self._template = mod.loadTemplate(self.name)
-            
+    @property
+    def geometry(self):
+        return self._geometry
     
+    # NOTE: quik hax, developer proper loading from template
+    def _setGeometry(self,
+        configpath: os.PathLike,
+        geometries: Dict[str, Geometry],
+        ):
+        with open(configpath) as config:
+            match = re.search(
+                r'ObjectTemplate\.geometry (?P<geometry>\S+)',
+                config.read(),
+                re.IGNORECASE | re.MULTILINE)
+            if match:
+                geometryname = match.group('geometry')
+                logging.info(f'Found geometry {geometryname}')
+                self._geometry = geometries[geometryname]
+            else:
+                #errmsg = f'could not find mesh path for {self._template.name}'
+                errmsg = f'could not find mesh path for {self.name}'
+                logging.error(errmsg)
+                raise FileNotFoundError(errmsg)

@@ -10,6 +10,9 @@ class Vec3(object):
     def __str__(self):
         return f'{self.x}, {self.y}, {self.z}'
     
+    def __repr__(self):
+        return [x, y, z]
+    
     def __iter__(self):
         for value in [self.x, self.y, self.z]:
             yield value

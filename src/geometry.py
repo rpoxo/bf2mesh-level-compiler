@@ -1,7 +1,7 @@
-
+import os
 
 class Geometry(object):
 
-    def __init__(self, name):
+    def __init__(self, name: str, meshpath: os.PathLike):
         self.name = name
-        self.path = None
+        self.path = meshpath
