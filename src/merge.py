@@ -15,6 +15,7 @@ from geometry import Geometry
 from mod import get_mod_templates, get_mod_geometries
 from objectTemplate import load_templates, load_geometries
 from staticobject import Staticobject, parse_config_staticobjects
+from vec3 import Vec3
 
 
 def get_groups(staticobjects: List[Staticobject]):
@@ -102,10 +103,17 @@ def merge_cluster(
         basemesh.translate(-base.position)
         logging.info(f'rotating base {base.name} for {-base.rotation}')
         basemesh.rotate(-base.rotation)
-        export_name = f'{base.name}_merged={"=".join([str(round(axis)) for axis in base.position])}'
+
         # NOTE: for some reason bf2 culls meshes if they not centered to bounding box
         # Need to test if need to adjust whole mesh, or bounding box enough
-        raise NotImplementedError(f'add CenterToObject')
+        center_offset = basemesh.get_lod_center_offset(geomId=0, lodId=0)
+        center_offset = Vec3(*center_offset)
+        logging.info(f'translating base by center offset = {center_offset}')
+        #raise NotImplementedError(f'add CenterToObject')
+        basemesh.translate(-center_offset)
+        base.position += center_offset
+        
+        export_name = f'{base.name}_merged={"=".join([str(round(axis)) for axis in base.position])}'
         export_fname = os.path.join(
             dst,
             export_name,
@@ -246,7 +254,8 @@ def main(args):
 
 def set_logging(args):
     if args.verbose is not None:
-        logger = logging.getLogger(__name__)
+        # TODO: logging only self module
+        logger = logging.getLogger()
         levels = {
             0: logging.ERROR,
             1: logging.INFO,
