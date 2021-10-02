@@ -105,15 +105,6 @@ def merge_cluster(
         logging.info(f'rotating base {base.name} for {-base.rotation}')
         basemesh.rotate(-base.rotation)
 
-        # NOTE: for some reason bf2 culls meshes if they not centered to bounding box
-        # Need to test if need to adjust whole mesh, or bounding box enough
-        center_offset = basemesh.get_lod_center_offset(geomId=0, lodId=0)
-        center_offset = Vec3(*center_offset)
-        logging.info(f'translating base by center offset = {center_offset}')
-        #raise NotImplementedError(f'add CenterToObject')
-        basemesh.translate(-center_offset)
-        base.position += center_offset
-        
         export_name = f'{base.name}_merged={"=".join([str(round(axis)) for axis in base.position])}'
         export_fname = os.path.join(
             dst,
