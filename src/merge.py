@@ -32,6 +32,7 @@ def generate_template_visible_only(src, dst, name, new_name):
     patterns_collision = [
         r'^CollisionManager.*',
         r'^ObjectTemplate\.collisionMesh.*',
+        r'^ObjectTemplate\.setCollisionMesh.*',
         r'^ObjectTemplate\.mapMaterial.*',
         r'^ObjectTemplate\.hasCollisionPhysics.*',
         r'^ObjectTemplate\.physicsType.*',
