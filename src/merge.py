@@ -5,7 +5,7 @@ import os
 import sys
 import shutil
 from typing import List, Dict, Tuple
-from itertools import groupby
+from itertools import groupby, chain
 from operator import attrgetter
 
 import bf2mesh
@@ -28,35 +28,17 @@ def get_groups(staticobjects: List[Staticobject]) -> List[List[Staticobject]]:
             attrgetter('group'))]
 
 def get_unique_collision_staticobjects(clusters: List[List[Staticobject]]) -> List[Staticobject]:
-    return [staticobject for cluster in clusters for staticobject in cluster]
-
-def replace_template_contents(src, dst, name, new_name, remove_col=False, remove_visible=False):
-    patterns_visible = [
-        r'^GeometryTemplate.*',
-        r'^ObjectTemplate\.geometry.*',
-        r'^ObjectTemplate\.cullRadiusScale.*',
-    ]
-
-    logging.info(f'moving {src} to {dst}, replacing {name} -> {new_name}')
-    with open(dst, 'w') as newconfig:
-        with open(src, 'r') as oldconfig:
-            contents = oldconfig.read()
-            contents = contents.replace(name, new_name)
-            for line in contents.splitlines():
-                if remove_col:
-                    if any([re.findall(pattern, line, re.IGNORECASE)
-                            for pattern in patterns_collision]):
-                        line = 'rem ' + line
-                if remove_visible:
-                    if any([re.findall(pattern, line, re.IGNORECASE)
-                            for pattern in patterns_visible]):
-                        line = 'rem ' + line
-                newconfig.write(line + '\n')
+    seen = set()
+    # props to: https://stackoverflow.com/questions/10024646/how-to-get-list-of-objects-with-unique-attribute
+    return [seen.add(staticobject.name) or staticobject for staticobject in chain(*clusters) if staticobject.name not in seen]
 
 def generate_renamed_config(
-        src: os.PathLike, dst: os.PathLike,
-        name_old: str, name_new: str,
-        remove_col=False,
+        src: os.PathLike,
+        dst: os.PathLike,
+        name_old: str,
+        name_new: str,
+        remove_col: bool = False,
+        remove_visible: bool = False,
         ):
     patterns_collision = [
         r'^CollisionManager.*',
@@ -65,6 +47,15 @@ def generate_renamed_config(
         r'^ObjectTemplate\.mapMaterial.*',
         r'^ObjectTemplate\.hasCollisionPhysics.*',
         r'^ObjectTemplate\.physicsType.*',
+    ]
+    patterns_collision_set = [
+        r'^ObjectTemplate\.collisionMesh.*',
+        r'^ObjectTemplate\.setCollisionMesh.*',
+    ]
+    patterns_visible = [
+        r'^GeometryTemplate.*',
+        r'^ObjectTemplate\.geometry.*',
+        r'^ObjectTemplate\.cullRadiusScale.*',
     ]
 
     logging.info(f"generating {dst} with replaced '{name_old}'->'{name_new}' from {dst}")
@@ -77,12 +68,22 @@ def generate_renamed_config(
                     if any([re.findall(pattern, line, re.IGNORECASE)
                             for pattern in patterns_collision]):
                         line = 'rem ' + line
+                if remove_visible:
+                    if any([re.findall(pattern, line, re.IGNORECASE)
+                            for pattern in patterns_visible]):
+                        line = 'rem ' + line
+                    # preserve col name
+                    if any([re.findall(pattern, line, re.IGNORECASE)
+                            for pattern in patterns_collision_set]):
+                        line = line.replace(name_new, name_old)
                 newconfig.write(line + '\n')
 
 def rename_template(
         path_object: os.PathLike,
-        old_name: str, new_name: str,
-        remove_col: bool,
+        old_name: str,
+        new_name: str,
+        remove_col: bool = False,
+        remove_visible: bool = False,
         ):
     for dirname, dirnames, filenames in os.walk(path_object):
         for filename in filenames:
@@ -92,40 +93,18 @@ def rename_template(
                 new_filename = filename.replace(old_name, new_name)
                 new_path = os.path.join(dirname, new_filename)
 
-                generate_renamed_config(old_path, new_path, old_name, new_name, remove_col)
+                generate_renamed_config(
+                    old_path, new_path,
+                    old_name, new_name,
+                    remove_col, remove_visible
+                    )
                 logging.info(f'removing {old_path}')
                 os.remove(old_path)
 
-
-def copy_as_custom_template(template_name, new_template_name, templates, dst):
-    src = os.path.dirname(templates[template_name])
-    dst = os.path.join(dst, new_template_name)
-
-    # cleanup first
-    logging.info(f'removing {dst}, ignore_errors')
-    shutil.rmtree(dst, ignore_errors=True)
-
-    logging.info(f'copy {src} to {dst}')
-    shutil.copytree(src, dst, dirs_exist_ok=True)
-
-    logging.info(f'removing {dst}/meshes')
-    shutil.rmtree(os.path.join(dst, 'meshes'))
-
-    return dst
-
-def generate_col(
-        staticobject: Staticobject,
-        templates: Dict[str, os.PathLike],
-        dst: os.PathLike,
+def generate_cluster_visiblemesh(
+        base: Staticobject,
+        staticobjects: List[Staticobject]
         ):
-    export_name = f'{staticobject.name}_col'
-    if export_name not in os.listdir(dst):
-        logging.info(f'copy template {staticobject.name} as {export_name} to {dst}')
-        copy_as_custom_template(staticobject.name, export_name, templates, dst)
-        rename_template(dst, staticobject.name, export_name, remove_visible=True)
-    return os.path.join(export_name, export_name + '.con')
-
-def generate_cluster_visiblemesh(base: Staticobject, staticobjects: List[Staticobject]):
     logging.info(f'merging meshes {[str(staticobject) for staticobject in staticobjects]} into {str(base)}')
     with VisibleMesh(base.geometry.path) as basemesh:
         logging.info(f'rotating base {base.name} for {base.rotation}')
@@ -193,20 +172,38 @@ def generate_visible(
         logging.info(f'generating merged visiblemesh for {[str(staticobject) for staticobject in cluster]}')
         generate_custom_cluster_object(cluster, templates, levelroot)
 
+def get_col_name(staticobject: Staticobject):
+    return f'{staticobject.name}_col'
+
+def generate_custom_collision_object(
+        staticobject: Staticobject,
+        templates: Dict[str, os.PathLike],
+        levelroot: os.PathLike,
+        ):
+    src = os.path.dirname(templates[staticobject.name])
+    name_col = get_col_name(staticobject)
+    dst = os.path.join(levelroot, 'objects', name_col)
+    copy_object_to_level(src, dst)
+    remove_meshes(dst)
+
+    rename_template(dst, staticobject.name, name_col, remove_visible=True)
+
 def generate_custom_collision_objects(
         clusters: List[List[Staticobject]],
         templates: Dict[str, os.PathLike],
         levelroot: os.PathLike,
         ):
-    unique_collisions = get_unique_collision_staticobjects(clusters)
-    logging.info(f'{[_.name for _ in unique_collisions]}')
-    raise NotImplementedError('copy templates directories as _col; remove meshes; rename contents(except col)&remove visible')
+    unique_collisions_staticobjects = get_unique_collision_staticobjects(clusters)
+    logging.info(f'unique collisions: {[_.name for _ in unique_collisions_staticobjects]}')
+    for staticobject in unique_collisions_staticobjects:
+        generate_custom_collision_object(staticobject, templates, levelroot)
 
 def generate_collisions(
         clusters: List[List[Staticobject]],
         templates: Dict[str, os.PathLike],
         levelroot: os.PathLike,
         ):
+    logging.info(f'generating invinsible collisions')
     generate_custom_collision_objects(clusters, templates, levelroot)
 
 def get_clusters(
@@ -270,8 +267,9 @@ def generate_merged(
 
     generate_visible(clusters, templates, levelroot)
     generate_collisions(clusters, templates, levelroot)
-    raise NotImplementedError('add cols')
     generate_configs(clusters, levelroot)
+    raise NotImplementedError('add cols')
+    
 
     raise NotImplementedError('redo all, need cols')
     for group in groups:
