@@ -18,7 +18,7 @@ from staticobject import Staticobject, parse_config_staticobjects
 from vec3 import Vec3
 
 
-def get_groups(staticobjects: List[Staticobject]):
+def get_groups(staticobjects: List[Staticobject]) -> List[List[Staticobject]]:
     return [
         list(group) for _,
         group in groupby(
@@ -27,6 +27,8 @@ def get_groups(staticobjects: List[Staticobject]):
                 key=attrgetter('group')),
             attrgetter('group'))]
 
+def get_unique_collision_staticobjects(clusters: List[List[Staticobject]]) -> List[Staticobject]:
+    return [staticobject for cluster in clusters for staticobject in cluster]
 
 def replace_template_contents(src, dst, name, new_name, remove_col=False, remove_visible=False):
     patterns_visible = [
@@ -169,13 +171,13 @@ def generate_custom_cluster_object(
         ):
     base = cluster[0]
     src = os.path.dirname(templates[base.name])
-    mesh_cluster = generate_cluster_visiblemesh(base, cluster[1:])
     name_cluster = get_merged_name(base)
     dst = os.path.join(levelroot, 'objects', name_cluster)
     copy_object_to_level(src, dst)
     remove_meshes(dst)
 
     export_path = os.path.join(dst, 'meshes', name_cluster+'.staticmesh')
+    mesh_cluster = generate_cluster_visiblemesh(base, cluster[1:])
     logging.info(f'exporting cluster into {export_path}')
     mesh_cluster.export(export_path)
 
@@ -190,6 +192,22 @@ def generate_visible(
     for cluster in clusters:
         logging.info(f'generating merged visiblemesh for {[str(staticobject) for staticobject in cluster]}')
         generate_custom_cluster_object(cluster, templates, levelroot)
+
+def generate_custom_collision_objects(
+        clusters: List[List[Staticobject]],
+        templates: Dict[str, os.PathLike],
+        levelroot: os.PathLike,
+        ):
+    unique_collisions = get_unique_collision_staticobjects(clusters)
+    logging.info(f'{[_.name for _ in unique_collisions]}')
+    raise NotImplementedError('copy templates directories as _col; remove meshes; rename contents(except col)&remove visible')
+
+def generate_collisions(
+        clusters: List[List[Staticobject]],
+        templates: Dict[str, os.PathLike],
+        levelroot: os.PathLike,
+        ):
+    generate_custom_collision_objects(clusters, templates, levelroot)
 
 def get_clusters(
         groups: List[List[Staticobject]],
@@ -251,7 +269,7 @@ def generate_merged(
     clusters = get_clusters(groups, templates, geometries)
 
     generate_visible(clusters, templates, levelroot)
-    generate_collisions(clusters)
+    generate_collisions(clusters, templates, levelroot)
     raise NotImplementedError('add cols')
     generate_configs(clusters, levelroot)
 
