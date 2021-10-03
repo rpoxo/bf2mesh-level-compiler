@@ -212,6 +212,7 @@ def generate_group_config(modroot,
         groupconfig.write('console.allowMultipleFileLoad 1\n')
         groupconfig.write('endIf\n')
         for cluster in clusters:
+            # always assuming first object is merged one
             base = cluster[0]
             cluster_name = f'{base.name}_merged={"=".join([str(round(axis)) for axis in base.position])}'
             base.name = cluster_name
