@@ -6,5 +6,5 @@ class Geometry(object):
         self.name = name
         self.path = meshpath
     
-    def __repr__(self):
+    def __str__(self):
         return self.name

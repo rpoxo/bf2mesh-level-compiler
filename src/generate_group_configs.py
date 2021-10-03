@@ -72,6 +72,7 @@ if __name__ == "__main__":
                         )
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', '--verbose', help='Set verbosity level', action='count')
+    parser.add_argument('--split-groups', help='Split groups by individual config files', action='store_true')
     parser.add_argument('-p', '--path', help='Path to staticobjects.con')
     args = parser.parse_args()
     set_logging(args)

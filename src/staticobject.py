@@ -39,7 +39,7 @@ def parse_config_staticobjects(fname: os.PathLike):
     return staticobjects
 
 class Staticobject(object):
-    def __init__(self, name):
+    def __init__(self, name: str):
         self.name = name
         self.position = Vec3(0.0, 0.0, 0.0)
         self.rotation = Vec3(0.0, 0.0, 0.0)
@@ -92,7 +92,7 @@ Object.group {self.group}
                 re.IGNORECASE | re.MULTILINE)
             if match:
                 geometryname = match.group('geometry')
-                logging.info(f'Found geometry {geometryname}')
+                logging.info(f'Found geometry {geometryname} for {self.name}')
                 self._geometry = geometries[geometryname]
             else:
                 #errmsg = f'could not find mesh path for {self._template.name}'
