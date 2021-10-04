@@ -44,7 +44,7 @@ class Staticobject(object):
         self.position = Vec3(0.0, 0.0, 0.0)
         self.rotation = Vec3(0.0, 0.0, 0.0)
         self.group = 0
-        self._geometry = None
+        self._geometry: Geometry = None
         self._template = None
     
     def setPosition(self, x, y, z):
@@ -57,6 +57,9 @@ class Staticobject(object):
     
     def __str__(self):
         return f'{self.name} ({self.position})'
+    
+    def __repr__(self):
+        return f'{self.name}'
     
     def _bf2float3str(self, float3: List[float]):
         return f'{float3[0]}/{float3[1]}/{float3[2]}'

@@ -5,6 +5,7 @@ import os
 import sys
 import shutil
 from typing import List, Dict, Tuple
+from math import cos, radians, sin
 from itertools import groupby, chain
 from operator import attrgetter
 
@@ -13,7 +14,7 @@ from bf2mesh.visiblemesh import VisibleMesh
 from geometry import Geometry
 
 from mod import get_mod_templates, get_mod_geometries
-from objectTemplate import load_templates, load_geometries
+from objectTemplate import ObjectTemplate, load_geometries
 from staticobject import Staticobject, parse_config_staticobjects
 from vec3 import Vec3
 
@@ -104,8 +105,8 @@ def rename_template(
 def generate_cluster_visiblemesh(
         base: Staticobject,
         staticobjects: List[Staticobject]
-        ):
-    logging.info(f'merging meshes {[str(staticobject) for staticobject in staticobjects]} into {str(base)}')
+        ) -> VisibleMesh:
+    logging.info(f'merging meshes {[staticobject.name for staticobject in staticobjects]} into {str(base)}')
     with VisibleMesh(base.geometry.path) as basemesh:
         logging.info(f'rotating base {base.name} for {base.rotation}')
         basemesh.rotate(base.rotation)
@@ -115,13 +116,15 @@ def generate_cluster_visiblemesh(
             with VisibleMesh(other.geometry.path) as secondmesh:
                 logging.info(f'rotating other {other.name} for {other.rotation}')
                 secondmesh.rotate([*other.rotation])
-                offset = base.position - other.position
+
                 logging.info(f'translating other {other.name} for {other.position}')
                 secondmesh.translate(other.position)
+
                 logging.info(f'merging {other.name} into {base.name}')
                 basemesh.merge(secondmesh)
         logging.info(f'translating base {base.name} for {-base.position}')
         basemesh.translate(-base.position)
+
         logging.info(f'rotating base {base.name} for {-base.rotation}')
         basemesh.rotate(-base.rotation)
     
@@ -140,37 +143,88 @@ def remove_meshes(path_object: os.PathLike):
     logging.info(f'removing {path_meshes}')
     shutil.rmtree(path_meshes, ignore_errors=True)
 
-def get_merged_name(base: Staticobject):
-    return f'{base.name}_merged={"=".join([str(round(axis)) for axis in base.position])}'
+def get_merged_name(staticobject: Staticobject):
+    return f'{staticobject.name}_merged={"=".join([str(round(axis)) for axis in staticobject.position])}'
+
+def rotate_world_position(position: Vec3, rotation: Vec3) -> Vec3:
+    def Rpitch(position: Vec3, angle):
+        newX = position.x
+        newY = position.y * cos(angle) - position.z * sin(angle)
+        newZ = position.y * sin(angle) + position.z * cos(angle)
+
+        return Vec3(newX, newY, newZ)
+
+    def Ryaw(position: Vec3, angle):
+        newX = position.x * cos(angle) + position.z * sin(angle)
+        newY = position.y
+        newZ = position.z * cos(angle) - position.x * sin(angle)
+
+        return Vec3(newX, newY, newZ)
+
+    def Rroll(position: Vec3, angle):
+        newX = position.x * cos(angle) - position.y * sin(angle)
+        newY = position.x * sin(angle) + position.y * cos(angle)
+        newZ = position.z
+
+        return Vec3(newX, newY, newZ)
+
+    logging.debug(f'rotating at {position} by {rotation}')
+    yaw, pitch, roll = [radians(axis) for axis in rotation]
+
+    return Ryaw(Rpitch(Rroll(position, roll), pitch), yaw)
 
 def generate_custom_cluster_object(
         cluster: List[Staticobject],
         templates: Dict[str, os.PathLike],
         levelroot: os.PathLike, 
-        ):
+        ) -> Staticobject:
     base = cluster[0]
+    mesh_cluster = generate_cluster_visiblemesh(base, cluster[1:])
+    
+    # needed due to mesh culling when looking away
+    offset = Vec3(*mesh_cluster.get_lod_center_offset(geomId=0, lodId=0))
+    logging.info(f'translating mesh centerToObject by {str(offset)}')
+    mesh_cluster.translate(-offset)
+
+    cluster_staticobject = Staticobject(base.name)
+    # rotate object world to object space, apply offset, rorate back
+    new_position = rotate_world_position(base.position, -base.rotation)
+    new_position += offset
+    new_position = rotate_world_position(new_position, base.rotation)
+    logging.info(f'new position {base.position} -> {new_position}')
+    cluster_staticobject.setPosition(*new_position)
+    cluster_staticobject.setRotation(*base.rotation)
+    cluster_staticobject.group = base.group
+    name_cluster = get_merged_name(cluster_staticobject)
+    cluster_staticobject.name = name_cluster
+    cluster_staticobject._template = ObjectTemplate(name_cluster)
+    cluster_staticobject._template.config = f'objects/{name_cluster}/{name_cluster}.con'
+
     src = os.path.dirname(templates[base.name])
-    name_cluster = get_merged_name(base)
     dst = os.path.join(levelroot, 'objects', name_cluster)
     copy_object_to_level(src, dst)
     remove_meshes(dst)
 
     export_path = os.path.join(dst, 'meshes', name_cluster+'.staticmesh')
-    mesh_cluster = generate_cluster_visiblemesh(base, cluster[1:])
     logging.info(f'exporting cluster into {export_path}')
     mesh_cluster.export(export_path)
 
     rename_template(dst, base.name, name_cluster, remove_col=True)
+    return cluster_staticobject
 
 def generate_visible(
         clusters: List[List[Staticobject]],
         templates: Dict[str, os.PathLike],
         levelroot: os.PathLike,
-        ):
+        ) -> List[Staticobject]:
     logging.info(f'generating merged visiblemeshes')
+    merged_cluster: List[Staticobject] = []
     for cluster in clusters:
         logging.info(f'generating merged visiblemesh for {[str(staticobject) for staticobject in cluster]}')
-        generate_custom_cluster_object(cluster, templates, levelroot)
+        merged = generate_custom_cluster_object(cluster, templates, levelroot)
+        merged_cluster.append(merged)
+    
+    return merged_cluster
 
 def get_col_name(staticobject: Staticobject):
     return f'{staticobject.name}_col'
@@ -202,9 +256,64 @@ def generate_collisions(
         clusters: List[List[Staticobject]],
         templates: Dict[str, os.PathLike],
         levelroot: os.PathLike,
-        ):
+        ) -> List[Staticobject]:
     logging.info(f'generating invinsible collisions')
     generate_custom_collision_objects(clusters, templates, levelroot)
+
+def generate_includes_for_bf2editor(cluster: List[Staticobject]) -> List[str]:
+    lines: List[str] = []
+    lines.append('if v_arg1 == BF2Editor\n')
+    lines.append('console.allowMultipleFileLoad 0\n')
+    for staticobject in cluster:
+        if staticobject.template and staticobject.template.config:
+            logging.info(f'run[{staticobject.name}] {staticobject.template.config}')
+            lines.append(f'run {staticobject.template.config}\n')
+    lines.append('console.allowMultipleFileLoad 1\n')
+    lines.append('endIf\n')
+
+    return lines
+
+def generate_config(
+        cluster_visible: List[Staticobject],
+        cluster_collisions: List[List[Staticobject]],
+        cluster_singleobjects: List[Staticobject],
+        levelroot: os.PathLike,
+        config_fname: os.PathLike,
+        ):
+    logging.info(f'generating configs from {[cluster for cluster in zip(cluster_visible, cluster_collisions)]}')
+
+    config_name, ext = os.path.splitext(config_fname)
+    configpath = os.path.join(levelroot, f'{config_name}_merged{ext}')
+    logging.info(f'writing config to {configpath}')
+    with open(configpath, 'w') as clusterconfig:
+        #logging.info(f'writing config to {configpath}')
+        generated_cluster: List[Staticobject] = []
+
+        for visible, collisions in zip(cluster_visible, cluster_collisions):
+            # create merged visible object
+            visible_object = Staticobject(visible.name)
+            visible_object.setPosition(*visible.position)
+            visible_object.setRotation(*visible.rotation)
+            visible_object.group = visible.group
+            visible_object._template = ObjectTemplate(visible.name)
+            visible_object._template.config = f'objects/{visible.name}/{visible.name}.con'
+            generated_cluster.append(visible_object)
+
+            # create _col objects
+            for staticobject in collisions:
+                staticobject.name = get_col_name(staticobject)
+                staticobject._template = ObjectTemplate(staticobject.name)
+                staticobject._template.config = f'objects/{staticobject.name}/{staticobject.name}.con'
+                generated_cluster.append(staticobject)
+        
+        # add old objects
+        for staticobject in cluster_singleobjects:
+            generated_cluster.append(staticobject)
+        
+        clusterconfig.writelines(generate_includes_for_bf2editor(generated_cluster))
+        
+        for staticobject in generated_cluster:
+            clusterconfig.write(staticobject.generateCreateCommands())
 
 def get_clusters(
         groups: List[List[Staticobject]],
@@ -249,12 +358,12 @@ def get_clusters(
 def generate_merged(
         modroot: os.PathLike,
         levelname: str,
-        config: os.PathLike,
+        config_fname: os.PathLike,
         templates: Dict[str, os.PathLike],
         geometries: Dict[str, Geometry],
         ):
     levelroot = os.path.join(modroot, 'levels', levelname)
-    config_group = os.path.join(levelroot, config)
+    config_group = os.path.join(levelroot, config_fname)
 
     staticobjects = parse_config_staticobjects(config_group)
 
@@ -264,63 +373,11 @@ def generate_merged(
     dst = os.path.join(levelroot, 'objects')
     groups = get_groups(staticobjects)
     clusters = get_clusters(groups, templates, geometries)
+    single_objects = [staticobject for staticobject in staticobjects if staticobject not in chain(*clusters)]
 
-    generate_visible(clusters, templates, levelroot)
+    visible = generate_visible(clusters, templates, levelroot)
     generate_collisions(clusters, templates, levelroot)
-    generate_configs(clusters, levelroot)
-    raise NotImplementedError('add cols')
-    
-
-    raise NotImplementedError('redo all, need cols')
-    for group in groups:
-        clusters = None
-        configs_group: List[str] = []
-        for cluster in clusters:
-            # copy templates as cols
-            #   copy templates directories
-            #       rename files
-            #       rename contents except collisions
-            #       remove visible
-            # copy templates as visible
-            #   copy base template directory
-            #       rename files
-            #       rename contents all
-            #       remove cols
-            config_cluster = merge_cluster(cluster, templates, geometries, dst)
-            config_cluster = os.path.join(
-                'objects', config_cluster).replace(
-                '\\', '/')
-            configs_group.append(config_cluster)
-        generate_group_config(
-            modroot,
-            levelroot,
-            config_group,
-            clusters,
-            configs_group)
-
-def generate_group_config(modroot,
-                          levelroot,
-                          config,
-                          clusters: List[List[Staticobject]],
-                          configs_cluster: List[str]):
-    config_group = os.path.join(levelroot, config)
-    root, ext = os.path.splitext(config_group)
-    new_config_group = root + '_vismeshes' + ext
-    logging.info(f'writing merged group config to {new_config_group}')
-    with open(new_config_group, 'w') as groupconfig:
-        groupconfig.write('if v_arg1 == BF2Editor\n')
-        groupconfig.write('console.allowMultipleFileLoad 0\n')
-        for config_cluster in configs_cluster:
-            groupconfig.write(f'run {config_cluster}\n')
-        groupconfig.write('console.allowMultipleFileLoad 1\n')
-        groupconfig.write('endIf\n')
-        for cluster in clusters:
-            # always assuming first object is merged one
-            base = cluster[0]
-            cluster_name = f'{base.name}_merged={"=".join([str(round(axis)) for axis in base.position])}'
-            base.name = cluster_name
-            groupconfig.write(base.generateCreateCommands())
-
+    generate_config(visible, clusters, single_objects, levelroot, config_fname)
 
 def main(args):
     args.root = os.path.join('E:/', 'Games', 'Project Reality')

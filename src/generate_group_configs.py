@@ -30,6 +30,8 @@ def generate_groups_configs(fname: os.PathLike):
     for groupid, blocks in groups.items():
         root, ext = os.path.splitext(fname)
         new_fname = root + f'_{groupid}' + ext
+        filename = os.path.basename(new_fname)
+        print(filename)
         logging.info(f'Writing config for group {groupid} in {new_fname}')
         with open(new_fname, 'w') as newconfig:
             for commands in blocks:
